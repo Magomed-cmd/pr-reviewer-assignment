@@ -1,12 +1,11 @@
 package postgres
 
-/*
 import (
 	"context"
 	"strings"
 	"time"
 
-	"goshop/internal/config"
+	"pr-reviewer-assignment/internal/config"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,7 +19,7 @@ type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func NewConnection(cfg *config.PostgresConfig, logger *zap.Logger) (*pgxpool.Pool, error) {
+func NewConnection(cfg *config.DatabaseConfig, logger *zap.Logger) (*pgxpool.Pool, error) {
 	dsn := cfg.GetDSN()
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
@@ -29,9 +28,9 @@ func NewConnection(cfg *config.PostgresConfig, logger *zap.Logger) (*pgxpool.Poo
 		return nil, err
 	}
 
-	poolConfig.MaxConns = 25               // максимум соединений
-	poolConfig.MinConns = 5                // минимум соединений
-	poolConfig.MaxConnLifetime = time.Hour // переподключение каждый час
+	poolConfig.MaxConns = 25
+	poolConfig.MinConns = 5
+	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = 30 * time.Minute
 	poolConfig.HealthCheckPeriod = time.Minute
 
@@ -64,6 +63,3 @@ func NewConnection(cfg *config.PostgresConfig, logger *zap.Logger) (*pgxpool.Poo
 
 	return pool, nil
 }
-*/
-
-// TODO: Адаптировать потом этот коннектор под этот проект
