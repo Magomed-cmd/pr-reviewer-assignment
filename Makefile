@@ -10,3 +10,6 @@ migrate-down:
 
 migrate-force:
 	migrate -path migrations -database $(DB_URL) force $(VERSION)
+
+run:
+	go run cmd/server/main.go
