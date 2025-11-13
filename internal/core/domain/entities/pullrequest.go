@@ -19,10 +19,6 @@ type PullRequest struct {
 }
 
 func NewPullRequest(id, name, authorID string, createdAt time.Time) *PullRequest {
-	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
-	}
-
 	return &PullRequest{
 		ID:                id,
 		Name:              name,
@@ -97,10 +93,6 @@ func (p *PullRequest) Merge(at time.Time) {
 		return
 	}
 
-	if at.IsZero() {
-		at = time.Now().UTC()
-	}
-
 	p.Status = types.PRStatusMerged
 	p.MergedAt = &at
 }
@@ -122,12 +114,4 @@ func (p *PullRequest) reviewerIndex(userID string) int {
 func removeIndex(items []string, index int) []string {
 	copy(items[index:], items[index+1:])
 	return items[:len(items)-1]
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
 }

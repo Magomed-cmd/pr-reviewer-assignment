@@ -13,3 +13,7 @@ migrate-force:
 
 run:
 	go run cmd/server/main.go
+
+lint:
+	go vet ./...
+	golangci-lint run
