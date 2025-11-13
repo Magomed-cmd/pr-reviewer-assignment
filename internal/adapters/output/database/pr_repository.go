@@ -43,7 +43,9 @@ func (r *PullRequestRepository) Create(ctx context.Context, pr *entities.PullReq
 		mergedAt = *pr.MergedAt
 	}
 
-	if _, err := r.db.Exec(ctx, query,
+	db := r.dbFor(ctx)
+
+	if _, err := db.Exec(ctx, query,
 		pr.ID,
 		pr.Name,
 		pr.AuthorID,
@@ -63,11 +65,11 @@ func (r *PullRequestRepository) Create(ctx context.Context, pr *entities.PullReq
 		return err
 	}
 
-	if err := r.syncReviewers(ctx, pr.ID, pr.AssignedReviewers, false); err != nil {
+	if err := r.syncReviewers(ctx, db, pr.ID, pr.AssignedReviewers, false); err != nil {
 		r.logger.Error("Failed to create reviewers, rolling back PR row",
 			zap.String("pr_id", pr.ID),
 			zap.Error(err))
-		_, _ = r.db.Exec(ctx, `DELETE FROM pull_requests WHERE pull_request_id = $1`, pr.ID)
+		_, _ = db.Exec(ctx, `DELETE FROM pull_requests WHERE pull_request_id = $1`, pr.ID)
 		return err
 	}
 
@@ -83,6 +85,8 @@ func (r *PullRequestRepository) Update(ctx context.Context, pr *entities.PullReq
 		WHERE pull_request_id = $1
 	`
 
+	db := r.dbFor(ctx)
+
 	r.logger.Debug("Updating pull request", zap.String("pr_id", pr.ID))
 
 	var mergedAt any
@@ -90,7 +94,7 @@ func (r *PullRequestRepository) Update(ctx context.Context, pr *entities.PullReq
 		mergedAt = *pr.MergedAt
 	}
 
-	tag, err := r.db.Exec(ctx, query,
+	tag, err := db.Exec(ctx, query,
 		pr.ID,
 		pr.Name,
 		pr.Status.String(),
@@ -109,7 +113,7 @@ func (r *PullRequestRepository) Update(ctx context.Context, pr *entities.PullReq
 		return domainErrors.NotFound(fmt.Sprintf("pull request %s", pr.ID))
 	}
 
-	if err := r.syncReviewers(ctx, pr.ID, pr.AssignedReviewers, true); err != nil {
+	if err := r.syncReviewers(ctx, db, pr.ID, pr.AssignedReviewers, true); err != nil {
 		return err
 	}
 
@@ -123,7 +127,9 @@ func (r *PullRequestRepository) GetByID(ctx context.Context, prID string) (*enti
 		WHERE pull_request_id = $1
 	`
 
-	pr, err := scanPullRequest(r.db.QueryRow(ctx, query, prID))
+	db := r.dbFor(ctx)
+
+	pr, err := scanPullRequest(db.QueryRow(ctx, query, prID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			r.logger.Warn("Pull request not found",
@@ -137,7 +143,7 @@ func (r *PullRequestRepository) GetByID(ctx context.Context, prID string) (*enti
 		return nil, err
 	}
 
-	reviewers, err := r.fetchReviewers(ctx, pr.ID)
+	reviewers, err := r.fetchReviewers(ctx, db, pr.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +164,9 @@ func (r *PullRequestRepository) ListByReviewer(ctx context.Context, reviewerID s
 		ORDER BY pr.created_at DESC, rev2.user_id ASC
 	`
 
-	rows, err := r.db.Query(ctx, query, reviewerID)
+	db := r.dbFor(ctx)
+
+	rows, err := db.Query(ctx, query, reviewerID)
 	if err != nil {
 		r.logger.Error("Failed to list PRs by reviewer",
 			zap.String("reviewer_id", reviewerID),
@@ -231,7 +239,7 @@ func (r *PullRequestRepository) ListByReviewer(ctx context.Context, reviewerID s
 	return result, nil
 }
 
-func (r *PullRequestRepository) fetchReviewers(ctx context.Context, prID string) ([]string, error) {
+func (r *PullRequestRepository) fetchReviewers(ctx context.Context, db postgres.DB, prID string) ([]string, error) {
 	const query = `
 		SELECT user_id
 		FROM pr_reviewers
@@ -239,7 +247,7 @@ func (r *PullRequestRepository) fetchReviewers(ctx context.Context, prID string)
 		ORDER BY assigned_at ASC, user_id ASC
 	`
 
-	rows, err := r.db.Query(ctx, query, prID)
+	rows, err := db.Query(ctx, query, prID)
 	if err != nil {
 		r.logger.Error("Failed to fetch reviewers",
 			zap.String("pr_id", prID),
@@ -272,9 +280,9 @@ func (r *PullRequestRepository) fetchReviewers(ctx context.Context, prID string)
 	return reviewers, nil
 }
 
-func (r *PullRequestRepository) syncReviewers(ctx context.Context, prID string, reviewers []string, replace bool) error {
+func (r *PullRequestRepository) syncReviewers(ctx context.Context, db postgres.DB, prID string, reviewers []string, replace bool) error {
 	if replace {
-		if _, err := r.db.Exec(ctx, `DELETE FROM pr_reviewers WHERE pull_request_id = $1`, prID); err != nil {
+		if _, err := db.Exec(ctx, `DELETE FROM pr_reviewers WHERE pull_request_id = $1`, prID); err != nil {
 			r.logger.Error("Failed to delete existing reviewers",
 				zap.String("pr_id", prID),
 				zap.Error(err))
@@ -296,7 +304,7 @@ func (r *PullRequestRepository) syncReviewers(ctx context.Context, prID string, 
 			continue
 		}
 
-		if _, err := r.db.Exec(ctx, query, prID, reviewer); err != nil {
+		if _, err := db.Exec(ctx, query, prID, reviewer); err != nil {
 			if isPgError(err, pgCodeForeignKeyViolation) {
 				r.logger.Warn("Reviewer not found while syncing assignment",
 					zap.String("pr_id", prID),
@@ -353,4 +361,12 @@ func scanPullRequest(row rowScanner) (*entities.PullRequest, error) {
 		CreatedAt:         createdAt,
 		MergedAt:          mergedPtr,
 	}, nil
+}
+
+func (r *PullRequestRepository) dbFor(ctx context.Context) postgres.DB {
+	if tx := postgres.DBFromContext(ctx); tx != nil {
+		return tx
+	}
+
+	return r.db
 }

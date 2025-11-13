@@ -46,6 +46,8 @@ func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User)
 			updated_at = EXCLUDED.updated_at
 	`
 
+	db := r.dbFor(ctx)
+
 	for _, user := range users {
 		if user == nil {
 			continue
@@ -61,7 +63,7 @@ func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User)
 			updatedAt = createdAt
 		}
 
-		if _, err := r.db.Exec(ctx, query,
+		if _, err := db.Exec(ctx, query,
 			user.ID,
 			user.Username,
 			user.TeamName,
@@ -93,7 +95,9 @@ func (r *UserRepository) GetByID(ctx context.Context, userID string) (*entities.
 		WHERE user_id = $1
 	`
 
-	user, err := scanUser(r.db.QueryRow(ctx, query, userID))
+	db := r.dbFor(ctx)
+
+	user, err := scanUser(db.QueryRow(ctx, query, userID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			r.logger.Warn("User not found",
@@ -118,7 +122,9 @@ func (r *UserRepository) ListByTeam(ctx context.Context, teamName string) ([]*en
 		ORDER BY username ASC, user_id ASC
 	`
 
-	rows, err := r.db.Query(ctx, query, teamName)
+	db := r.dbFor(ctx)
+
+	rows, err := db.Query(ctx, query, teamName)
 	if err != nil {
 		r.logger.Error("Failed to list users by team",
 			zap.String("team_name", teamName),
@@ -162,7 +168,9 @@ func (r *UserRepository) SetActivity(ctx context.Context, userID string, isActiv
 
 	updatedAt := time.Now().UTC()
 
-	user, err := scanUser(r.db.QueryRow(ctx, query, userID, isActive, updatedAt))
+	db := r.dbFor(ctx)
+
+	user, err := scanUser(db.QueryRow(ctx, query, userID, isActive, updatedAt))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			r.logger.Warn("User not found while updating activity",
@@ -194,4 +202,12 @@ func scanUser(row rowScanner) (*entities.User, error) {
 	}
 
 	return entities.NewUser(id, username, teamName, isActive, createdAt, updatedAt), nil
+}
+
+func (r *UserRepository) dbFor(ctx context.Context) postgres.DB {
+	if tx := postgres.DBFromContext(ctx); tx != nil {
+		return tx
+	}
+
+	return r.db
 }

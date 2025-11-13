@@ -7,16 +7,18 @@ import (
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	domainErrors "pr-reviewer-assignment/internal/core/domain/errors"
 	repo "pr-reviewer-assignment/internal/core/ports/repositories"
+	"pr-reviewer-assignment/internal/core/ports/transactions"
 	"pr-reviewer-assignment/internal/validation"
 
 	"go.uber.org/zap"
 )
 
 type PullRequestService struct {
-	prRepo   repo.PullRequestRepository
-	userRepo repo.UserRepository
-	teamRepo repo.TeamRepository
-	logger   *zap.Logger
+	prRepo    repo.PullRequestRepository
+	userRepo  repo.UserRepository
+	teamRepo  repo.TeamRepository
+	logger    *zap.Logger
+	txManager transactions.Manager
 }
 
 func NewPullRequestService(
@@ -24,15 +26,20 @@ func NewPullRequestService(
 	userRepo repo.UserRepository,
 	teamRepo repo.TeamRepository,
 	logger *zap.Logger,
+	txManager transactions.Manager,
 ) *PullRequestService {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	if txManager == nil {
+		txManager = transactions.NoopManager{}
+	}
 	return &PullRequestService{
-		prRepo:   prRepo,
-		userRepo: userRepo,
-		teamRepo: teamRepo,
-		logger:   logger,
+		prRepo:    prRepo,
+		userRepo:  userRepo,
+		teamRepo:  teamRepo,
+		logger:    logger,
+		txManager: txManager,
 	}
 }
 
@@ -67,36 +74,42 @@ func (s *PullRequestService) CreatePullRequest(ctx context.Context, pr *entities
 		pr.CreatedAt = time.Now().UTC()
 	}
 
-	author, err := s.userRepo.GetByID(ctx, pr.AuthorID)
-	if err != nil {
-		s.logger.Error("Failed to load author", zap.String("author_id", pr.AuthorID), zap.Error(err))
-		return nil, err
-	}
+	if err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+		author, err := s.userRepo.GetByID(txCtx, pr.AuthorID)
+		if err != nil {
+			s.logger.Error("Failed to load author", zap.String("author_id", pr.AuthorID), zap.Error(err))
+			return err
+		}
 
-	team, err := s.teamRepo.Get(ctx, author.TeamName)
-	if err != nil {
-		s.logger.Error("Failed to load team for author", zap.String("team_name", author.TeamName), zap.Error(err))
-		return nil, err
-	}
+		team, err := s.teamRepo.Get(txCtx, author.TeamName)
+		if err != nil {
+			s.logger.Error("Failed to load team for author", zap.String("team_name", author.TeamName), zap.Error(err))
+			return err
+		}
 
-	candidateIDs := s.buildReviewerPool(team.ActiveMembersExcluding(pr.AuthorID))
-	if len(candidateIDs) == 0 {
-		s.logger.Warn("No reviewers available", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
-		return nil, domainErrors.NoCandidate(team.Name)
-	}
+		candidateIDs := s.buildReviewerPool(team.ActiveMembersExcluding(pr.AuthorID))
+		if len(candidateIDs) == 0 {
+			s.logger.Warn("No reviewers available", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
+			return domainErrors.NoCandidate(team.Name)
+		}
 
-	if err := pr.AssignReviewers(candidateIDs); err != nil {
-		s.logger.Error("Failed to assign reviewers", zap.String("pr_id", pr.ID), zap.Error(err))
-		return nil, err
-	}
+		if err := pr.AssignReviewers(candidateIDs); err != nil {
+			s.logger.Error("Failed to assign reviewers", zap.String("pr_id", pr.ID), zap.Error(err))
+			return err
+		}
 
-	if len(pr.AssignedReviewers) == 0 {
-		s.logger.Warn("No reviewers assigned", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
-		return nil, domainErrors.NoCandidate(team.Name)
-	}
+		if len(pr.AssignedReviewers) == 0 {
+			s.logger.Warn("No reviewers assigned", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
+			return domainErrors.NoCandidate(team.Name)
+		}
 
-	if err := s.prRepo.Create(ctx, pr); err != nil {
-		s.logger.Error("Failed to persist pull request", zap.String("pr_id", pr.ID), zap.Error(err))
+		if err := s.prRepo.Create(txCtx, pr); err != nil {
+			s.logger.Error("Failed to persist pull request", zap.String("pr_id", pr.ID), zap.Error(err))
+			return err
+		}
+
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
@@ -110,20 +123,29 @@ func (s *PullRequestService) MergePullRequest(ctx context.Context, prID string) 
 	}
 	prID = validatedID
 
-	pr, err := s.prRepo.GetByID(ctx, prID)
-	if err != nil {
-		s.logger.Error("Failed to load pull request", zap.String("pr_id", prID), zap.Error(err))
+	var mergedPR *entities.PullRequest
+
+	if err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+		pr, err := s.prRepo.GetByID(txCtx, prID)
+		if err != nil {
+			s.logger.Error("Failed to load pull request", zap.String("pr_id", prID), zap.Error(err))
+			return err
+		}
+
+		pr.Merge(time.Now().UTC())
+
+		if err := s.prRepo.Update(txCtx, pr); err != nil {
+			s.logger.Error("Failed to update pull request", zap.String("pr_id", pr.ID), zap.Error(err))
+			return err
+		}
+
+		mergedPR = pr
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
-	pr.Merge(time.Now().UTC())
-
-	if err := s.prRepo.Update(ctx, pr); err != nil {
-		s.logger.Error("Failed to update pull request", zap.String("pr_id", pr.ID), zap.Error(err))
-		return nil, err
-	}
-
-	return pr, nil
+	return mergedPR, nil
 }
 
 func (s *PullRequestService) ReassignReviewer(ctx context.Context, prID, oldReviewerID string) (*entities.PullRequest, string, error) {
@@ -141,42 +163,54 @@ func (s *PullRequestService) ReassignReviewer(ctx context.Context, prID, oldRevi
 	}
 	oldReviewerID = validatedOldReviewerID
 
-	pr, err := s.prRepo.GetByID(ctx, prID)
-	if err != nil {
-		s.logger.Error("Failed to load pull request", zap.String("pr_id", prID), zap.Error(err))
+	var (
+		updatedPR     *entities.PullRequest
+		newReviewerID string
+	)
+
+	if err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+		pr, err := s.prRepo.GetByID(txCtx, prID)
+		if err != nil {
+			s.logger.Error("Failed to load pull request", zap.String("pr_id", prID), zap.Error(err))
+			return err
+		}
+
+		author, err := s.userRepo.GetByID(txCtx, pr.AuthorID)
+		if err != nil {
+			s.logger.Error("Failed to load author", zap.String("author_id", pr.AuthorID), zap.Error(err))
+			return err
+		}
+
+		team, err := s.teamRepo.Get(txCtx, author.TeamName)
+		if err != nil {
+			s.logger.Error("Failed to load team for author", zap.String("team_name", author.TeamName), zap.Error(err))
+			return err
+		}
+
+		replacementID, err := s.pickReplacement(team, pr, oldReviewerID)
+		if err != nil {
+			s.logger.Error("Failed to pick replacement reviewer", zap.String("pr_id", prID), zap.Error(err))
+			return err
+		}
+
+		newReviewerID, err = pr.ReplaceReviewer(oldReviewerID, replacementID)
+		if err != nil {
+			s.logger.Error("Failed to replace reviewer", zap.String("pr_id", prID), zap.Error(err))
+			return err
+		}
+
+		if err := s.prRepo.Update(txCtx, pr); err != nil {
+			s.logger.Error("Failed to update pull request", zap.String("pr_id", prID), zap.Error(err))
+			return err
+		}
+
+		updatedPR = pr
+		return nil
+	}); err != nil {
 		return nil, "", err
 	}
 
-	author, err := s.userRepo.GetByID(ctx, pr.AuthorID)
-	if err != nil {
-		s.logger.Error("Failed to load author", zap.String("author_id", pr.AuthorID), zap.Error(err))
-		return nil, "", err
-	}
-
-	team, err := s.teamRepo.Get(ctx, author.TeamName)
-	if err != nil {
-		s.logger.Error("Failed to load team for author", zap.String("team_name", author.TeamName), zap.Error(err))
-		return nil, "", err
-	}
-
-	replacementID, err := s.pickReplacement(team, pr, oldReviewerID)
-	if err != nil {
-		s.logger.Error("Failed to pick replacement reviewer", zap.String("pr_id", prID), zap.Error(err))
-		return nil, "", err
-	}
-
-	newReviewerID, err := pr.ReplaceReviewer(oldReviewerID, replacementID)
-	if err != nil {
-		s.logger.Error("Failed to replace reviewer", zap.String("pr_id", prID), zap.Error(err))
-		return nil, "", err
-	}
-
-	if err := s.prRepo.Update(ctx, pr); err != nil {
-		s.logger.Error("Failed to update pull request", zap.String("pr_id", prID), zap.Error(err))
-		return nil, "", err
-	}
-
-	return pr, newReviewerID, nil
+	return updatedPR, newReviewerID, nil
 }
 
 func (s *PullRequestService) buildReviewerPool(members []*entities.User) []string {

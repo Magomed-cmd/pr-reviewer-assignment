@@ -6,26 +6,32 @@ import (
 
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	repo "pr-reviewer-assignment/internal/core/ports/repositories"
+	"pr-reviewer-assignment/internal/core/ports/transactions"
 	"pr-reviewer-assignment/internal/validation"
 
 	"go.uber.org/zap"
 )
 
 type TeamService struct {
-	teamRepo repo.TeamRepository
-	userRepo repo.UserRepository
-	logger   *zap.Logger
+	teamRepo  repo.TeamRepository
+	userRepo  repo.UserRepository
+	logger    *zap.Logger
+	txManager transactions.Manager
 }
 
-func NewTeamService(teamRepo repo.TeamRepository, userRepo repo.UserRepository, logger *zap.Logger) *TeamService {
+func NewTeamService(teamRepo repo.TeamRepository, userRepo repo.UserRepository, logger *zap.Logger, txManager transactions.Manager) *TeamService {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	if txManager == nil {
+		txManager = transactions.NoopManager{}
+	}
 
 	return &TeamService{
-		teamRepo: teamRepo,
-		userRepo: userRepo,
-		logger:   logger,
+		teamRepo:  teamRepo,
+		userRepo:  userRepo,
+		logger:    logger,
+		txManager: txManager,
 	}
 }
 
@@ -42,17 +48,25 @@ func (s *TeamService) CreateTeam(ctx context.Context, name string, members []*en
 
 	preparedMembers := s.prepareMembers(name, members, now)
 
-	if err := s.teamRepo.Create(ctx, team); err != nil {
-		s.logger.Error("Failed to create team", zap.String("team_name", name), zap.Error(err))
+	if err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.teamRepo.Create(txCtx, team); err != nil {
+			s.logger.Error("Failed to create team", zap.String("team_name", name), zap.Error(err))
+			return err
+		}
+
+		if len(preparedMembers) > 0 {
+			if err := s.userRepo.UpsertMany(txCtx, preparedMembers); err != nil {
+				s.logger.Error("Failed to upsert team members", zap.String("team_name", name), zap.Error(err))
+				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 
 	if len(preparedMembers) > 0 {
-		if err := s.userRepo.UpsertMany(ctx, preparedMembers); err != nil {
-			s.logger.Error("Failed to upsert team members", zap.String("team_name", name), zap.Error(err))
-			return nil, err
-		}
-
 		team.Members = make(map[string]*entities.User, len(preparedMembers))
 		for _, member := range preparedMembers {
 			team.Members[member.ID] = member

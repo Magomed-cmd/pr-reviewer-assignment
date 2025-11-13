@@ -33,7 +33,9 @@ func (r *TeamRepository) Create(ctx context.Context, team *entities.Team) error 
 
 	r.logger.Debug("Creating team", zap.String("team_name", team.Name))
 
-	_, err := r.db.Exec(ctx, query, team.Name, team.CreatedAt, team.UpdatedAt)
+	db := r.dbFor(ctx)
+
+	_, err := db.Exec(ctx, query, team.Name, team.CreatedAt, team.UpdatedAt)
 	if err != nil {
 		if isPgError(err, pgCodeUniqueViolation) {
 			r.logger.Warn("Team already exists",
@@ -59,7 +61,9 @@ func (r *TeamRepository) Update(ctx context.Context, team *entities.Team) error 
 
 	r.logger.Debug("Updating team", zap.String("team_name", team.Name))
 
-	tag, err := r.db.Exec(ctx, query, team.Name, team.UpdatedAt)
+	db := r.dbFor(ctx)
+
+	tag, err := db.Exec(ctx, query, team.Name, team.UpdatedAt)
 	if err != nil {
 		r.logger.Error("Failed to update team",
 			zap.String("team_name", team.Name),
@@ -87,7 +91,9 @@ func (r *TeamRepository) Get(ctx context.Context, teamName string) (*entities.Te
 		ORDER BY u.username
 	`
 
-	rows, err := r.db.Query(ctx, query, teamName)
+	db := r.dbFor(ctx)
+
+	rows, err := db.Query(ctx, query, teamName)
 	if err != nil {
 		r.logger.Error("Failed to get team",
 			zap.String("team_name", teamName),
@@ -140,4 +146,12 @@ func (r *TeamRepository) Get(ctx context.Context, teamName string) (*entities.Te
 	}
 
 	return team, nil
+}
+
+func (r *TeamRepository) dbFor(ctx context.Context) postgres.DB {
+	if tx := postgres.DBFromContext(ctx); tx != nil {
+		return tx
+	}
+
+	return r.db
 }
