@@ -28,7 +28,7 @@ func NewPullRequestRepository(db postgres.DB, logger *zap.Logger) *PullRequestRe
 	}
 }
 
-func (r *PullRequestRepository) Create(ctx context.Context, tx postgres.DB, pr *entities.PullRequest) error {
+func (r *PullRequestRepository) Create(ctx context.Context, pr *entities.PullRequest) error {
 	const query = `
 		INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status, created_at, merged_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -43,15 +43,14 @@ func (r *PullRequestRepository) Create(ctx context.Context, tx postgres.DB, pr *
 		mergedAt = *pr.MergedAt
 	}
 
-	_, err := tx.Exec(ctx, query,
+	if _, err := r.db.Exec(ctx, query,
 		pr.ID,
 		pr.Name,
 		pr.AuthorID,
 		pr.Status.String(),
 		pr.CreatedAt,
 		mergedAt,
-	)
-	if err != nil {
+	); err != nil {
 		if isPgError(err, pgCodeUniqueViolation) {
 			r.logger.Warn("Pull request already exists",
 				zap.String("pr_id", pr.ID))
@@ -64,47 +63,12 @@ func (r *PullRequestRepository) Create(ctx context.Context, tx postgres.DB, pr *
 		return err
 	}
 
-	return nil
-}
-
-func (r *PullRequestRepository) AddReviewers(ctx context.Context, tx postgres.DB, prID string, reviewers []string) error {
-	if len(reviewers) == 0 {
-		return nil
-	}
-
-	r.logger.Debug("Adding reviewers",
-		zap.String("pr_id", prID),
-		zap.Strings("reviewers", reviewers))
-
-	const query = `
-		INSERT INTO pr_reviewers (pull_request_id, user_id)
-		VALUES ($1, $2)
-	`
-
-	for _, reviewer := range reviewers {
-		if reviewer == "" {
-			continue
-		}
-
-		_, err := tx.Exec(ctx, query, prID, reviewer)
-		if err != nil {
-			if isPgError(err, pgCodeForeignKeyViolation) {
-				r.logger.Warn("Reviewer not found while assigning to PR",
-					zap.String("pr_id", prID),
-					zap.String("reviewer", reviewer))
-				return domainErrors.NotFound(fmt.Sprintf("user %s", reviewer))
-			}
-
-			if isPgError(err, pgCodeUniqueViolation) {
-				continue
-			}
-
-			r.logger.Error("Failed to add reviewer",
-				zap.String("pr_id", prID),
-				zap.String("reviewer", reviewer),
-				zap.Error(err))
-			return err
-		}
+	if err := r.syncReviewers(ctx, pr.ID, pr.AssignedReviewers, false); err != nil {
+		r.logger.Error("Failed to create reviewers, rolling back PR row",
+			zap.String("pr_id", pr.ID),
+			zap.Error(err))
+		_, _ = r.db.Exec(ctx, `DELETE FROM pull_requests WHERE pull_request_id = $1`, pr.ID)
+		return err
 	}
 
 	return nil
@@ -145,23 +109,11 @@ func (r *PullRequestRepository) Update(ctx context.Context, pr *entities.PullReq
 		return domainErrors.NotFound(fmt.Sprintf("pull request %s", pr.ID))
 	}
 
-	return nil
-}
-
-func (r *PullRequestRepository) UpdateReviewers(ctx context.Context, tx postgres.DB, prID string, reviewers []string) error {
-	r.logger.Debug("Updating reviewers",
-		zap.String("pr_id", prID),
-		zap.Strings("reviewers", reviewers))
-
-	_, err := tx.Exec(ctx, `DELETE FROM pr_reviewers WHERE pull_request_id = $1`, prID)
-	if err != nil {
-		r.logger.Error("Failed to delete old reviewers",
-			zap.String("pr_id", prID),
-			zap.Error(err))
+	if err := r.syncReviewers(ctx, pr.ID, pr.AssignedReviewers, true); err != nil {
 		return err
 	}
 
-	return r.AddReviewers(ctx, tx, prID, reviewers)
+	return nil
 }
 
 func (r *PullRequestRepository) GetByID(ctx context.Context, prID string) (*entities.PullRequest, error) {
@@ -264,16 +216,16 @@ func (r *PullRequestRepository) ListByReviewer(ctx context.Context, reviewerID s
 		}
 	}
 
-	result := make([]*entities.PullRequest, 0, len(prOrder))
-	for _, id := range prOrder {
-		result = append(result, prMap[id])
-	}
-
 	if err := rows.Err(); err != nil {
 		r.logger.Error("Rows iteration failed while listing PRs by reviewer",
 			zap.String("reviewer_id", reviewerID),
 			zap.Error(err))
 		return nil, err
+	}
+
+	result := make([]*entities.PullRequest, 0, len(prOrder))
+	for _, id := range prOrder {
+		result = append(result, prMap[id])
 	}
 
 	return result, nil
@@ -318,6 +270,53 @@ func (r *PullRequestRepository) fetchReviewers(ctx context.Context, prID string)
 	}
 
 	return reviewers, nil
+}
+
+func (r *PullRequestRepository) syncReviewers(ctx context.Context, prID string, reviewers []string, replace bool) error {
+	if replace {
+		if _, err := r.db.Exec(ctx, `DELETE FROM pr_reviewers WHERE pull_request_id = $1`, prID); err != nil {
+			r.logger.Error("Failed to delete existing reviewers",
+				zap.String("pr_id", prID),
+				zap.Error(err))
+			return err
+		}
+	}
+
+	if len(reviewers) == 0 {
+		return nil
+	}
+
+	const query = `
+		INSERT INTO pr_reviewers (pull_request_id, user_id)
+		VALUES ($1, $2)
+	`
+
+	for _, reviewer := range reviewers {
+		if reviewer == "" {
+			continue
+		}
+
+		if _, err := r.db.Exec(ctx, query, prID, reviewer); err != nil {
+			if isPgError(err, pgCodeForeignKeyViolation) {
+				r.logger.Warn("Reviewer not found while syncing assignment",
+					zap.String("pr_id", prID),
+					zap.String("reviewer", reviewer))
+				return domainErrors.NotFound(fmt.Sprintf("user %s", reviewer))
+			}
+
+			if isPgError(err, pgCodeUniqueViolation) {
+				continue
+			}
+
+			r.logger.Error("Failed to assign reviewer",
+				zap.String("pr_id", prID),
+				zap.String("reviewer", reviewer),
+				zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
 }
 
 func scanPullRequest(row rowScanner) (*entities.PullRequest, error) {

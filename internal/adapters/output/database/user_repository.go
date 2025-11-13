@@ -46,11 +46,19 @@ func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User)
 			updated_at = EXCLUDED.updated_at
 	`
 
-	r.logger.Debug("Upserting users", zap.Int("count", len(users)))
-
 	for _, user := range users {
 		if user == nil {
 			continue
+		}
+
+		createdAt := user.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = time.Now().UTC()
+		}
+
+		updatedAt := user.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = createdAt
 		}
 
 		if _, err := r.db.Exec(ctx, query,
@@ -58,8 +66,8 @@ func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User)
 			user.Username,
 			user.TeamName,
 			user.IsActive,
-			user.CreatedAt,
-			user.UpdatedAt,
+			createdAt,
+			updatedAt,
 		); err != nil {
 			if isPgError(err, pgCodeForeignKeyViolation) {
 				r.logger.Warn("Team not found while upserting user",
@@ -76,36 +84,6 @@ func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User)
 	}
 
 	return nil
-}
-
-func (r *UserRepository) SetActivity(ctx context.Context, userID string, isActive bool, updatedAt time.Time) (*entities.User, error) {
-	const query = `
-		UPDATE users
-		SET is_active = $2,
-		    updated_at = $3
-		WHERE user_id = $1
-		RETURNING user_id, username, team_name, is_active, created_at, updated_at
-	`
-
-	r.logger.Debug("Setting user activity",
-		zap.String("user_id", userID),
-		zap.Bool("is_active", isActive))
-
-	user, err := scanUser(r.db.QueryRow(ctx, query, userID, isActive, updatedAt))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			r.logger.Warn("User not found while updating activity",
-				zap.String("user_id", userID))
-			return nil, domainErrors.NotFound(fmt.Sprintf("user %s", userID))
-		}
-
-		r.logger.Error("Failed to set user activity",
-			zap.String("user_id", userID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	return user, nil
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, userID string) (*entities.User, error) {
@@ -171,6 +149,34 @@ func (r *UserRepository) ListByTeam(ctx context.Context, teamName string) ([]*en
 	}
 
 	return users, nil
+}
+
+func (r *UserRepository) SetActivity(ctx context.Context, userID string, isActive bool) (*entities.User, error) {
+	const query = `
+		UPDATE users
+		SET is_active = $2,
+		    updated_at = $3
+		WHERE user_id = $1
+		RETURNING user_id, username, team_name, is_active, created_at, updated_at
+	`
+
+	updatedAt := time.Now().UTC()
+
+	user, err := scanUser(r.db.QueryRow(ctx, query, userID, isActive, updatedAt))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			r.logger.Warn("User not found while updating activity",
+				zap.String("user_id", userID))
+			return nil, domainErrors.NotFound(fmt.Sprintf("user %s", userID))
+		}
+
+		r.logger.Error("Failed to set user activity",
+			zap.String("user_id", userID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func scanUser(row rowScanner) (*entities.User, error) {
