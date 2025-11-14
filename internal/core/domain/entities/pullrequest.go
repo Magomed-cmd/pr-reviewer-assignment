@@ -14,6 +14,7 @@ type PullRequest struct {
 	AuthorID          string
 	Status            types.PRStatus
 	AssignedReviewers []string
+	NeedMoreReviewers bool
 	CreatedAt         time.Time
 	MergedAt          *time.Time
 }
@@ -25,6 +26,7 @@ func NewPullRequest(id, name, authorID string, createdAt time.Time) *PullRequest
 		AuthorID:          authorID,
 		Status:            types.PRStatusOpen,
 		AssignedReviewers: make([]string, 0, 2),
+		NeedMoreReviewers: true,
 		CreatedAt:         createdAt,
 	}
 }
@@ -61,6 +63,7 @@ func (p *PullRequest) AssignReviewers(reviewers []string) error {
 	}
 
 	p.AssignedReviewers = assigned
+	p.updateNeedMoreReviewers()
 	return nil
 }
 
@@ -76,15 +79,18 @@ func (p *PullRequest) ReplaceReviewer(oldReviewer, newReviewer string) (string, 
 
 	if newReviewer == "" {
 		p.AssignedReviewers = removeIndex(p.AssignedReviewers, index)
+		p.updateNeedMoreReviewers()
 		return "", nil
 	}
 
 	if p.HasReviewer(newReviewer) {
 		p.AssignedReviewers = removeIndex(p.AssignedReviewers, index)
+		p.updateNeedMoreReviewers()
 		return "", nil
 	}
 
 	p.AssignedReviewers[index] = newReviewer
+	p.updateNeedMoreReviewers()
 	return newReviewer, nil
 }
 
@@ -109,6 +115,15 @@ func (p *PullRequest) reviewerIndex(userID string) int {
 	}
 
 	return -1
+}
+
+func (p *PullRequest) SetReviewers(reviewers []string) {
+	p.AssignedReviewers = reviewers
+	p.updateNeedMoreReviewers()
+}
+
+func (p *PullRequest) updateNeedMoreReviewers() {
+	p.NeedMoreReviewers = len(p.AssignedReviewers) < 2
 }
 
 func removeIndex(items []string, index int) []string {

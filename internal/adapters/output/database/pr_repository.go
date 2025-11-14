@@ -148,7 +148,7 @@ func (r *PullRequestRepository) GetByID(ctx context.Context, prID string) (*enti
 		return nil, err
 	}
 
-	pr.AssignedReviewers = reviewers
+	pr.SetReviewers(reviewers)
 	return pr, nil
 }
 
@@ -233,7 +233,9 @@ func (r *PullRequestRepository) ListByReviewer(ctx context.Context, reviewerID s
 
 	result := make([]*entities.PullRequest, 0, len(prOrder))
 	for _, id := range prOrder {
-		result = append(result, prMap[id])
+		pr := prMap[id]
+		pr.SetReviewers(pr.AssignedReviewers)
+		result = append(result, pr)
 	}
 
 	return result, nil
