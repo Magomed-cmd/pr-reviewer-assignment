@@ -11,7 +11,7 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
-	JWT      JWTConfig
+	Auth     AuthConfig
 }
 
 type ServerConfig struct {
@@ -28,8 +28,9 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
-type JWTConfig struct {
-	Secret string
+type AuthConfig struct {
+	AdminToken string
+	UserToken  string
 }
 
 func Load() (*Config, error) {
@@ -50,8 +51,9 @@ func Load() (*Config, error) {
 			Password: getEnv("DB_PASSWORD", "password"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
-		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "your-secret-key"),
+		Auth: AuthConfig{
+			AdminToken: getEnv("ADMIN_TOKEN", "admin-secret"),
+			UserToken:  getEnv("USER_TOKEN", "user-secret"),
 		},
 	}, nil
 }

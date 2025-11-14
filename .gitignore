@@ -84,3 +84,4 @@ go.sum
 # Ignore binary output
 pr-reviewer-assignment
 pr-reviewer-serviceplan/
+.cache/

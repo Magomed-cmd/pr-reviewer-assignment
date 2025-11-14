@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"pr-reviewer-assignment/internal/config"
-	"pr-reviewer-assignment/internal/infrastructure/database/postgres"
+	"pr-reviewer-assignment/internal/infrastructure"
 	"pr-reviewer-assignment/internal/logger"
 
 	"go.uber.org/zap"
@@ -13,18 +19,36 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("failed to load config: %v", err)
 	}
 
-	zapLogger := logger.NewFromGinMode(cfg.Server.Mode)
-	defer zapLogger.Sync()
+	appLogger := logger.NewFromGinMode(cfg.Server.Mode)
+	defer appLogger.Sync()
 
-	db, err := postgres.NewConnection(&cfg.Database, zapLogger)
+	app, err := infrastructure.NewApp(cfg, appLogger)
 	if err != nil {
-		zapLogger.Fatal("Failed to connect to database", zap.Error(err))
+		appLogger.Fatal("failed to init app", zap.Error(err))
 	}
-	defer db.Close()
+	defer app.Close()
 
-	zapLogger.Info("Database connection successful!")
-	zapLogger.Info("PR Reviewer Service is ready")
+	server := app.HTTPServer()
+
+	go func() {
+		appLogger.Info("HTTP server starting", zap.String("addr", server.Addr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			appLogger.Fatal("server stopped unexpectedly", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	appLogger.Info("Shutting down HTTP server")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		appLogger.Error("Graceful shutdown failed", zap.Error(err))
+	}
 }
