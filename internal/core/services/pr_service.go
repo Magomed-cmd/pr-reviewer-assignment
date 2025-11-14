@@ -175,15 +175,15 @@ func (s *PullRequestService) ReassignReviewer(ctx context.Context, prID, oldRevi
 			return err
 		}
 
-		author, err := s.userRepo.GetByID(txCtx, pr.AuthorID)
+		reviewer, err := s.userRepo.GetByID(txCtx, oldReviewerID)
 		if err != nil {
-			s.logger.Error("Failed to load author", zap.String("author_id", pr.AuthorID), zap.Error(err))
+			s.logger.Error("Failed to load reviewer", zap.String("reviewer_id", oldReviewerID), zap.Error(err))
 			return err
 		}
 
-		team, err := s.teamRepo.Get(txCtx, author.TeamName)
+		team, err := s.teamRepo.Get(txCtx, reviewer.TeamName)
 		if err != nil {
-			s.logger.Error("Failed to load team for author", zap.String("team_name", author.TeamName), zap.Error(err))
+			s.logger.Error("Failed to load reviewer team", zap.String("team_name", reviewer.TeamName), zap.Error(err))
 			return err
 		}
 
