@@ -11,7 +11,6 @@ import (
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
-	Auth     AuthConfig
 }
 
 type ServerConfig struct {
@@ -26,11 +25,6 @@ type DatabaseConfig struct {
 	User     string
 	Password string
 	SSLMode  string
-}
-
-type AuthConfig struct {
-	AdminToken string
-	UserToken  string
 }
 
 func Load() (*Config, error) {
@@ -50,10 +44,6 @@ func Load() (*Config, error) {
 			User:     getEnv("DB_USER", "postgres"),
 			Password: getEnv("DB_PASSWORD", "password"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
-		},
-		Auth: AuthConfig{
-			AdminToken: getEnv("ADMIN_TOKEN", "admin-secret"),
-			UserToken:  getEnv("USER_TOKEN", "user-secret"),
 		},
 	}, nil
 }

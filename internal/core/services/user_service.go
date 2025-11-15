@@ -17,9 +17,6 @@ type UserService struct {
 }
 
 func NewUserService(userRepo repo.UserRepository, prRepo repo.PullRequestRepository, logger *zap.Logger) *UserService {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
 
 	return &UserService{
 		userRepo: userRepo,

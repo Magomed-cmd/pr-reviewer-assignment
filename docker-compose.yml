@@ -10,6 +10,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  postgres_test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: pr_reviewer_test_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
 #   app:
 #     build: .
 #     ports:
@@ -22,5 +33,6 @@ services:
 #       DB_HOST: postgres
 #       DB_PORT: 5432
 
-# volumes:
-#   postgres_data:
+volumes:
+  postgres_data:
+  postgres_test_data:

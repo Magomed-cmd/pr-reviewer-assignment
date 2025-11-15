@@ -28,9 +28,6 @@ func NewPullRequestService(
 	logger *zap.Logger,
 	txManager transactions.Manager,
 ) *PullRequestService {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
 	if txManager == nil {
 		txManager = transactions.NoopManager{}
 	}

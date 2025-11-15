@@ -9,7 +9,6 @@ import (
 	"pr-reviewer-assignment/internal/config"
 	"pr-reviewer-assignment/internal/core/services"
 	"pr-reviewer-assignment/internal/infrastructure/database/postgres"
-	"pr-reviewer-assignment/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,9 +25,6 @@ type App struct {
 func NewApp(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
-	}
-	if logger == nil {
-		logger = zap.NewNop()
 	}
 
 	gin.SetMode(cfg.Server.Mode)
@@ -48,13 +44,12 @@ func NewApp(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	userService := services.NewUserService(userRepo, prRepo, logger)
 	prService := services.NewPullRequestService(prRepo, userRepo, teamRepo, logger, txManager)
 
-	authMiddleware := middleware.NewAuthMiddleware(cfg.Auth.AdminToken, cfg.Auth.UserToken, logger)
 	healthHandler := adapterhttp.NewHealthHandler()
 	teamHandler := adapterhttp.NewTeamHandler(teamService, logger)
 	userHandler := adapterhttp.NewUserHandler(userService, logger)
 	prHandler := adapterhttp.NewPullRequestHandler(prService, logger)
 
-	router := NewRouter(logger, authMiddleware, healthHandler, teamHandler, userHandler, prHandler)
+	router := NewRouter(logger, healthHandler, teamHandler, userHandler, prHandler)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.Server.Port,

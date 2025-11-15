@@ -20,9 +20,6 @@ type TeamService struct {
 }
 
 func NewTeamService(teamRepo repo.TeamRepository, userRepo repo.UserRepository, logger *zap.Logger, txManager transactions.Manager) *TeamService {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
 	if txManager == nil {
 		txManager = transactions.NoopManager{}
 	}

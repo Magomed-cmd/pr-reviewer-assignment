@@ -16,9 +16,6 @@ type TransactionManager struct {
 }
 
 func NewTransactionManager(pool *pgxpool.Pool, logger *zap.Logger) *TransactionManager {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
 
 	return &TransactionManager{
 		pool:   pool,
