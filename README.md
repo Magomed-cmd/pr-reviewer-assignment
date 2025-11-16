@@ -26,3 +26,28 @@
 - В `docker-compose.yml` есть второй PostgreSQL сервис `postgres_test` (порт `5434`) специально для интеграционных тестов. 
 - При поднятии стенда `docker-compose up` создаёт две базы: рабочую (`pr_reviewer_db`) и тестовую (`pr_reviewer_test_db`). 
 - Это позволяет изолировать тестовые сценарии от основной БД.
+
+## Тесты
+
+### Интеграционные
+
+Работают поверх реального PostgreSQL (сервис `postgres_test`) и реальных репозиториев/сервисов, но без запуска HTTP‑сервера — запросы выполняются через Gin в памяти.
+
+```bash
+docker compose up -d postgres_test
+go test ./tests/integration -count=1
+docker compose stop postgres_test
+```
+
+### End-to-End
+
+E2E тесты поднимают тот же Gin router через `httptest.Server`: сервис стартует в памяти, а сценарий прогоняется реальным `net/http` клиентом. БД всё так же настоящая (`postgres_test`). При необходимости легко переключиться на dockerized `app` (см. compose файл).
+
+```bash
+docker compose up -d postgres_test
+go test ./tests/e2e -count=1
+docker compose stop postgres_test
+```
+
+**Про test suite-паттерн**  
+Мы понимаем, что наличие `IntegrationSuite`/`E2ESuite` и общей фикстуры для TestMain — это не классическая идиома Go (обычно предпочитают простые функции и таблицы), но для небольшого учебного проекта считаем приемлемым использовать эти обёртки ради меньшего бойлерплейта и единообразия в тестах.

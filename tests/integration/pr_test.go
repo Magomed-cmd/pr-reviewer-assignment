@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"pr-reviewer-assignment/tests/integration/helpers"
+	helpers "pr-reviewer-assignment/tests/shared"
 
 	"github.com/stretchr/testify/require"
 )

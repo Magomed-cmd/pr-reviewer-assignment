@@ -1,8 +1,9 @@
-package tests
+package e2e
 
 import (
 	"context"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -20,16 +21,10 @@ import (
 )
 
 var (
+	testSuite  *helpers.E2ESuite
 	testPool   *pgxpool.Pool
-	testRouter *gin.Engine
-	testSuite  *helpers.IntegrationSuite
+	testServer *httptest.Server
 	testLogger = zap.NewNop()
-)
-
-const (
-	testTeamCore     = "core-team"
-	testTeamPlatform = "platform-team"
-	testAuthorID     = "author-1"
 )
 
 func TestMain(m *testing.M) {
@@ -58,9 +53,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	router := buildRouter(pool)
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	testSuite = helpers.NewE2ESuite(server.URL, server.Client(), pool)
 	testPool = pool
-	testRouter = buildRouter(pool)
-	testSuite = helpers.NewIntegrationSuite(testRouter, testPool)
+	testServer = server
 
 	code := m.Run()
 	os.Exit(code)

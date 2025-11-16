@@ -1,6 +1,6 @@
 DB_URL := "postgres://postgres:password@127.0.0.1:5433/pr_reviewer_db?sslmode=disable"
 
-.PHONY: migrate-up migrate-down migrate-force
+.PHONY: migrate-up migrate-down migrate-force run lint test test-integration test-e2e
 
 migrate-up:
 	migrate -path migrations -database $(DB_URL) up
@@ -17,3 +17,12 @@ run:
 lint:
 	go vet ./...
 	golangci-lint run
+
+test:
+	go test ./...
+
+test-integration:
+	go test -p 1 -count=1 ./tests/integration
+
+test-e2e:
+	go test -p 1 -count=1 ./tests/e2e
