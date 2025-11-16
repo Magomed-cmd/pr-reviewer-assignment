@@ -241,6 +241,26 @@ func (r *PullRequestRepository) ListByReviewer(ctx context.Context, reviewerID s
 	return result, nil
 }
 
+func (r *PullRequestRepository) Count(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM pull_requests`
+	var count int
+	if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
+		r.logger.Error("Failed to count pull requests", zap.Error(err))
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *PullRequestRepository) CountAssignments(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM pr_reviewers`
+	var count int
+	if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
+		r.logger.Error("Failed to count assignments", zap.Error(err))
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *PullRequestRepository) fetchReviewers(ctx context.Context, db postgres.DB, prID string) ([]string, error) {
 	const query = `
 		SELECT user_id
@@ -315,6 +335,9 @@ func (r *PullRequestRepository) syncReviewers(ctx context.Context, db postgres.D
 			}
 
 			if isPgError(err, pgCodeUniqueViolation) {
+				r.logger.Debug("Reviewer already assigned",
+					zap.String("pr_id", prID),
+					zap.String("reviewer", reviewer))
 				continue
 			}
 

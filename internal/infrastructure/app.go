@@ -43,13 +43,15 @@ func NewApp(cfg *config.Config, logger *zap.Logger) (*App, error) {
 	teamService := services.NewTeamService(teamRepo, userRepo, logger, txManager)
 	userService := services.NewUserService(userRepo, prRepo, logger)
 	prService := services.NewPullRequestService(prRepo, userRepo, teamRepo, logger, txManager)
+	statsService := services.NewStatsService(teamRepo, userRepo, prRepo)
 
 	healthHandler := adapterhttp.NewHealthHandler()
 	teamHandler := adapterhttp.NewTeamHandler(teamService, logger)
 	userHandler := adapterhttp.NewUserHandler(userService, logger)
 	prHandler := adapterhttp.NewPullRequestHandler(prService, logger)
+	statsHandler := adapterhttp.NewStatsHandler(statsService, logger)
 
-	router := NewRouter(logger, healthHandler, teamHandler, userHandler, prHandler)
+	router := NewRouter(logger, healthHandler, teamHandler, userHandler, prHandler, statsHandler)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.Server.Port,

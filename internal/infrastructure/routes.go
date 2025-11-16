@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewRouter(logger *zap.Logger, health *adapterhttp.HealthHandler, team *adapterhttp.TeamHandler, user *adapterhttp.UserHandler, pr *adapterhttp.PullRequestHandler) *gin.Engine {
+func NewRouter(logger *zap.Logger, health *adapterhttp.HealthHandler, team *adapterhttp.TeamHandler, user *adapterhttp.UserHandler, pr *adapterhttp.PullRequestHandler, stats *adapterhttp.StatsHandler) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	if logger != nil {
@@ -22,6 +22,7 @@ func NewRouter(logger *zap.Logger, health *adapterhttp.HealthHandler, team *adap
 	registerTeamRoutes(r, team)
 	registerUserRoutes(r, user)
 	registerPullRequestRoutes(r, pr)
+	registerStatsRoutes(r, stats)
 
 	return r
 }
@@ -57,4 +58,11 @@ func registerPullRequestRoutes(r *gin.Engine, handler *adapterhttp.PullRequestHa
 	group.POST("/create", handler.Create)
 	group.POST("/merge", handler.Merge)
 	group.POST("/reassign", handler.Reassign)
+}
+
+func registerStatsRoutes(r *gin.Engine, handler *adapterhttp.StatsHandler) {
+	if handler == nil {
+		return
+	}
+	handler.RegisterRoutes(r)
 }

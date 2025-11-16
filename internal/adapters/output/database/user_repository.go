@@ -30,6 +30,16 @@ func NewUserRepository(db postgres.DB, logger *zap.Logger) *UserRepository {
 	}
 }
 
+func (r *UserRepository) Count(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM users`
+	var count int
+	if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
+		r.logger.Error("Failed to count users", zap.Error(err))
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *UserRepository) UpsertMany(ctx context.Context, users []*entities.User) error {
 	if len(users) == 0 {
 		return nil

@@ -75,13 +75,15 @@ func buildRouter(pool *pgxpool.Pool) *gin.Engine {
 	teamService := services.NewTeamService(teamRepo, userRepo, testLogger, txManager)
 	userService := services.NewUserService(userRepo, prRepo, testLogger)
 	prService := services.NewPullRequestService(prRepo, userRepo, teamRepo, testLogger, txManager)
+	statsService := services.NewStatsService(teamRepo, userRepo, prRepo)
 
 	healthHandler := adapterhttp.NewHealthHandler()
 	teamHandler := adapterhttp.NewTeamHandler(teamService, testLogger)
 	userHandler := adapterhttp.NewUserHandler(userService, testLogger)
 	prHandler := adapterhttp.NewPullRequestHandler(prService, testLogger)
+	statsHandler := adapterhttp.NewStatsHandler(statsService, testLogger)
 
-	return infrastructure.NewRouter(testLogger, healthHandler, teamHandler, userHandler, prHandler)
+	return infrastructure.NewRouter(testLogger, healthHandler, teamHandler, userHandler, prHandler, statsHandler)
 }
 
 func resetTables(t testing.TB) {

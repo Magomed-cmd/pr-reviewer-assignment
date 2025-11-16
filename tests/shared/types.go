@@ -2,7 +2,6 @@ package shared
 
 import "pr-reviewer-assignment/internal/dto"
 
-// DTO-обёртки для декодирования JSON в тестах.
 type CreateTeamResponse struct {
 	Team *dto.TeamDTO `json:"team"`
 }

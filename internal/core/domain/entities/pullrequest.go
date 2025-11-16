@@ -19,13 +19,15 @@ type PullRequest struct {
 	MergedAt          *time.Time
 }
 
+const MaxReviewers = 2
+
 func NewPullRequest(id, name, authorID string, createdAt time.Time) *PullRequest {
 	return &PullRequest{
 		ID:                id,
 		Name:              name,
 		AuthorID:          authorID,
 		Status:            types.PRStatusOpen,
-		AssignedReviewers: make([]string, 0, 2),
+		AssignedReviewers: make([]string, 0, MaxReviewers),
 		NeedMoreReviewers: true,
 		CreatedAt:         createdAt,
 	}
@@ -37,7 +39,7 @@ func (p *PullRequest) AssignReviewers(reviewers []string) error {
 	}
 
 	unique := make(map[string]struct{}, len(reviewers))
-	assigned := make([]string, 0, min(2, len(reviewers)))
+	assigned := make([]string, 0, min(MaxReviewers, len(reviewers)))
 
 	for _, reviewer := range reviewers {
 		reviewer = strings.TrimSpace(reviewer)
@@ -57,7 +59,7 @@ func (p *PullRequest) AssignReviewers(reviewers []string) error {
 		unique[reviewer] = struct{}{}
 		assigned = append(assigned, reviewer)
 
-		if len(assigned) == 2 {
+		if len(assigned) == MaxReviewers {
 			break
 		}
 	}
@@ -123,7 +125,7 @@ func (p *PullRequest) SetReviewers(reviewers []string) {
 }
 
 func (p *PullRequest) updateNeedMoreReviewers() {
-	p.NeedMoreReviewers = len(p.AssignedReviewers) < 2
+	p.NeedMoreReviewers = len(p.AssignedReviewers) < MaxReviewers
 }
 
 func removeIndex(items []string, index int) []string {

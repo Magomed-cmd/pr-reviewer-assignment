@@ -25,6 +25,16 @@ func NewTeamRepository(db postgres.DB, logger *zap.Logger) *TeamRepository {
 	}
 }
 
+func (r *TeamRepository) Count(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM teams`
+	var count int
+	if err := r.db.QueryRow(ctx, query).Scan(&count); err != nil {
+		r.logger.Error("Failed to count teams", zap.Error(err))
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *TeamRepository) Create(ctx context.Context, team *entities.Team) error {
 	const query = `
 		INSERT INTO teams (team_name, created_at, updated_at)
