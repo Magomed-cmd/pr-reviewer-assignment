@@ -95,8 +95,8 @@ func (s *TeamService) prepareMembers(teamName string, members []*entities.User, 
 		return nil
 	}
 
-	sanitized := make([]*entities.User, 0, len(members))
-	seen := make(map[string]struct{})
+	prepared := make([]*entities.User, 0, len(members))
+	seenIDs := make(map[string]struct{})
 
 	for _, member := range members {
 		if member == nil {
@@ -113,10 +113,10 @@ func (s *TeamService) prepareMembers(teamName string, members []*entities.User, 
 			continue
 		}
 
-		if _, exists := seen[memberID]; exists {
+		if _, exists := seenIDs[memberID]; exists {
 			continue
 		}
-		seen[memberID] = struct{}{}
+		seenIDs[memberID] = struct{}{}
 
 		member.ID = memberID
 		member.TeamName = teamName
@@ -130,8 +130,8 @@ func (s *TeamService) prepareMembers(teamName string, members []*entities.User, 
 			member.UpdatedAt = member.CreatedAt
 		}
 
-		sanitized = append(sanitized, member)
+		prepared = append(prepared, member)
 	}
 
-	return sanitized
+	return prepared
 }

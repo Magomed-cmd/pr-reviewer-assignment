@@ -151,7 +151,9 @@ func (s *E2ESuite) PerformRawRequest(t testing.TB, method, path, rawBody, conten
 
 func (s *E2ESuite) DecodeBody(t testing.TB, resp *http.Response, target any) {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(target))
 }
 
@@ -162,7 +164,7 @@ func (s *E2ESuite) ExpectStatus(t testing.TB, resp *http.Response, status int) {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	require.Equal(t, status, resp.StatusCode, "unexpected status: %s", string(body))
 }

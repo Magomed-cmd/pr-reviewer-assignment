@@ -23,7 +23,11 @@ func main() {
 	}
 
 	appLogger := logger.NewFromGinMode(cfg.Server.Mode)
-	defer appLogger.Sync()
+	defer func() {
+		if err := appLogger.Sync(); err != nil {
+			log.Printf("failed to sync logger: %v", err)
+		}
+	}()
 
 	app, err := infrastructure.NewApp(cfg, appLogger)
 	if err != nil {
