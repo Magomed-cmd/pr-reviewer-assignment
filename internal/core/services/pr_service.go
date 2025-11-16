@@ -6,6 +6,7 @@ import (
 
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	domainErrors "pr-reviewer-assignment/internal/core/domain/errors"
+	"pr-reviewer-assignment/internal/core/domain/types"
 	repo "pr-reviewer-assignment/internal/core/ports/repositories"
 	"pr-reviewer-assignment/internal/core/ports/transactions"
 	"pr-reviewer-assignment/internal/validation"
@@ -161,6 +162,10 @@ func (s *PullRequestService) ReassignReviewer(ctx context.Context, prID, oldRevi
 		if err != nil {
 			s.logger.Error("Failed to load pull request", zap.String("pr_id", prID), zap.Error(err))
 			return err
+		}
+
+		if pr.Status == types.PRStatusMerged {
+			return domainErrors.PRMerged(pr.ID)
 		}
 
 		reviewer, err := s.userRepo.GetByID(txCtx, oldReviewerID)

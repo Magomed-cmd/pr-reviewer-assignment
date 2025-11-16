@@ -1,6 +1,6 @@
 DB_URL := "postgres://postgres:password@127.0.0.1:5433/pr_reviewer_db?sslmode=disable"
 
-.PHONY: migrate-up migrate-down migrate-force run lint test test-integration test-e2e
+.PHONY: migrate-up migrate-down migrate-force run lint test test-integration test-e2e docker-up docker-down
 
 migrate-up:
 	migrate -path migrations -database $(DB_URL) up
@@ -26,3 +26,9 @@ test-integration:
 
 test-e2e:
 	go test -p 1 -count=1 ./tests/e2e
+
+docker-up:
+	docker compose up --build -d
+
+docker-down:
+	docker compose down -v

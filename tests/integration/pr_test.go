@@ -27,7 +27,6 @@ func TestPullRequestEndpoints_CreateAndReassign(t *testing.T) {
 	require.Equal(t, "OPEN", pr.Status)
 	require.Len(t, pr.AssignedReviewers, 2)
 	require.NotContains(t, pr.AssignedReviewers, testAuthorID)
-	require.False(t, pr.NeedMoreReviewers)
 
 	oldReviewer := pr.AssignedReviewers[0]
 	resp := testSuite.PerformRequest(t, http.MethodPost, "/pullRequest/reassign", map[string]any{
@@ -102,10 +101,9 @@ func TestPullRequestEndpoints_CreateValidationErrors(t *testing.T) {
 
 func TestPullRequestEndpoints_CreateWithLimitedReviewers(t *testing.T) {
 	cases := []struct {
-		name                 string
-		setupTeam            func(t *testing.T)
-		wantAssignedCount    int
-		wantNeedMoreReviewer bool
+		name              string
+		setupTeam         func(t *testing.T)
+		wantAssignedCount int
 	}{
 		{
 			name: "single active reviewer",
@@ -115,8 +113,7 @@ func TestPullRequestEndpoints_CreateWithLimitedReviewers(t *testing.T) {
 					With("reviewer-1", "Bob", true).
 					Build())
 			},
-			wantAssignedCount:    1,
-			wantNeedMoreReviewer: true,
+			wantAssignedCount: 1,
 		},
 		{
 			name: "no active reviewers",
@@ -125,8 +122,7 @@ func TestPullRequestEndpoints_CreateWithLimitedReviewers(t *testing.T) {
 					With(testAuthorID, "Author", true).
 					Build())
 			},
-			wantAssignedCount:    0,
-			wantNeedMoreReviewer: true,
+			wantAssignedCount: 0,
 		},
 	}
 
@@ -138,7 +134,6 @@ func TestPullRequestEndpoints_CreateWithLimitedReviewers(t *testing.T) {
 			const prID = "PR-100"
 			pr := testSuite.CreatePullRequest(t, prID, "Edge", testAuthorID)
 			require.Len(t, pr.AssignedReviewers, tc.wantAssignedCount)
-			require.Equal(t, tc.wantNeedMoreReviewer, pr.NeedMoreReviewers)
 		})
 	}
 }

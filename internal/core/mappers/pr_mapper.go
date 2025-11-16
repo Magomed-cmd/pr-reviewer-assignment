@@ -29,7 +29,6 @@ func PullRequestToDTO(pr *entities.PullRequest) *dto.PullRequestDTO {
 		AuthorID:          pr.AuthorID,
 		Status:            pr.Status.String(),
 		AssignedReviewers: append([]string(nil), pr.AssignedReviewers...),
-		NeedMoreReviewers: pr.NeedMoreReviewers,
 		CreatedAt:         createdAt,
 		MergedAt:          mergedAt,
 	}

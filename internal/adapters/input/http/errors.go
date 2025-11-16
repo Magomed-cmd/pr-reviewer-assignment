@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	errorCodeBadRequest   = "BAD_REQUEST"
-	errorCodeInternal     = "INTERNAL_ERROR"
-	errorCodeUnauthorized = "UNAUTHORIZED"
+	errorCodeBadRequest = "BAD_REQUEST"
+	errorCodeInternal   = "INTERNAL_ERROR"
 )
 
 func respondError(c *gin.Context, status int, code, message string) {

@@ -15,6 +15,21 @@ services:
       timeout: 5s
       retries: 5
 
+  migrations:
+    image: migrate/migrate:4
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      [
+        "-path=/migrations",
+        "-database=postgres://postgres:password@postgres:5432/pr_reviewer_db?sslmode=disable",
+        "up"
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   postgres_test:
     image: postgres:15-alpine
     environment:
@@ -33,6 +48,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
