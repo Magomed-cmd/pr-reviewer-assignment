@@ -38,14 +38,6 @@ Thumbs.db
 /tmp/
 *.log
 
-# Environment files
-.env
-.env.local
-.env.production
-.env.test
-config.yaml
-config.yml
-
 # Database
 *.db
 *.sqlite

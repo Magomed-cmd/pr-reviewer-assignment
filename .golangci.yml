@@ -1,0 +1,90 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  go: '1.23'
+
+linters:
+  default: none
+  enable:
+    # Критичные проверки
+    - errcheck        # проверка ошибок
+    - staticcheck     # включает gosimple, unused, stylecheck
+    - govet           # стандартный анализ
+    - ineffassign     # неиспользуемые присваивания
+    
+    # Безопасность
+    - gosec           # security issues
+    - bodyclose       # закрытие HTTP body
+    - sqlclosecheck   # закрытие SQL ресурсов
+    - rowserrcheck    # rows.Err()
+    
+    # Ошибки
+    - errorlint       # wrapping ошибок
+    
+    # Код
+    - unconvert       # лишние конверсии
+    - misspell        # опечатки
+    
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  
+        - shadow
+        
+    gosec:
+      excludes:
+        - G404
+        - G304
+        - G112
+        
+    errorlint:
+      errorf: true
+      asserts: false
+      comparison: false
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes: github.com/yourusername/pr-reviewer-assignment
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+        - bodyclose
+        
+    - path: tests/
+      linters:
+        - errcheck
+        - gosec
+        - bodyclose
+        
+    - path: migrations/
+      linters:
+        - errcheck
+        - gosec
+
+output:
+  formats:
+    text:
+      print-linter-name: true
+      print-issued-lines: true

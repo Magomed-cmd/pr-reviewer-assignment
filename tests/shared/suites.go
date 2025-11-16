@@ -184,6 +184,7 @@ func (s *E2ESuite) CreateTeam(t testing.TB, teamName string, members []map[strin
 		"team_name": teamName,
 		"members":   members,
 	})
+	defer func() { _ = resp.Body.Close() }()
 	s.ExpectStatus(t, resp, http.StatusCreated)
 
 	var parsed CreateTeamResponse
@@ -199,6 +200,7 @@ func (s *E2ESuite) CreatePullRequest(t testing.TB, prID, name, authorID string) 
 		"pull_request_name": name,
 		"author_id":         authorID,
 	})
+	defer func() { _ = resp.Body.Close() }()
 	s.ExpectStatus(t, resp, http.StatusCreated)
 
 	var parsed PullRequestResponse
@@ -212,6 +214,7 @@ func (s *E2ESuite) MergePullRequest(t testing.TB, prID string) *dto.PullRequestD
 	resp := s.PerformRequest(t, http.MethodPost, "/pullRequest/merge", map[string]any{
 		"pull_request_id": prID,
 	})
+	defer func() { _ = resp.Body.Close() }()
 	s.ExpectStatus(t, resp, http.StatusOK)
 
 	var parsed PullRequestResponse

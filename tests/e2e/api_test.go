@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	e2eTeamName = "e2e-team"
-	e2eAuthorID = "e2e-author"
-	e2eTeamSize = 4
+	e2eTeamName      = "e2e-team"
+	e2eAuthorID      = "e2e-author"
+	e2eTeamSize      = 4
 	e2eReviewerSlots = 2
 )
 
@@ -32,6 +32,7 @@ func TestE2E_FullFlow(t *testing.T) {
 	require.Len(t, team.Members, e2eTeamSize)
 
 	resp := testSuite.PerformRequest(t, http.MethodGet, "/team/get?team_name="+e2eTeamName, nil)
+	defer resp.Body.Close()
 	testSuite.ExpectStatus(t, resp, http.StatusOK)
 
 	var fetched dto.TeamDTO
@@ -46,6 +47,7 @@ func TestE2E_FullFlow(t *testing.T) {
 	targetReviewer := pr.AssignedReviewers[0]
 
 	resp = testSuite.PerformRequest(t, http.MethodGet, "/users/getReview?user_id="+targetReviewer, nil)
+	defer resp.Body.Close()
 	testSuite.ExpectStatus(t, resp, http.StatusOK)
 
 	var review dto.ListPullRequestsResponse
@@ -57,6 +59,7 @@ func TestE2E_FullFlow(t *testing.T) {
 		"user_id":   targetReviewer,
 		"is_active": false,
 	})
+	defer resp.Body.Close()
 	testSuite.ExpectStatus(t, resp, http.StatusOK)
 
 	var updated helpers.UserResponse
@@ -67,6 +70,7 @@ func TestE2E_FullFlow(t *testing.T) {
 		"pull_request_id": pr.PullRequestID,
 		"old_user_id":     targetReviewer,
 	})
+	defer resp.Body.Close()
 	testSuite.ExpectStatus(t, resp, http.StatusOK)
 
 	var reassign helpers.ReassignResponse

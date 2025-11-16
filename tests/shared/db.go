@@ -93,7 +93,6 @@ func runSQLFile(ctx context.Context, pool *pgxpool.Pool, migrationsDir, fileName
 	return nil
 }
 
-
 func splitStatements(sql string) []string {
 	parts := strings.Split(sql, ";")
 	statements := make([]string, 0, len(parts))
