@@ -85,19 +85,10 @@ func (s *PullRequestService) CreatePullRequest(ctx context.Context, pr *entities
 		}
 
 		candidateIDs := s.buildReviewerPool(team.ActiveMembersExcluding(pr.AuthorID))
-		if len(candidateIDs) == 0 {
-			s.logger.Warn("No reviewers available", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
-			return domainErrors.NoCandidate(team.Name)
-		}
 
 		if err := pr.AssignReviewers(candidateIDs); err != nil {
 			s.logger.Error("Failed to assign reviewers", zap.String("pr_id", pr.ID), zap.Error(err))
 			return err
-		}
-
-		if len(pr.AssignedReviewers) == 0 {
-			s.logger.Warn("No reviewers assigned", zap.String("team_name", team.Name), zap.String("pr_id", pr.ID))
-			return domainErrors.NoCandidate(team.Name)
 		}
 
 		if err := s.prRepo.Create(txCtx, pr); err != nil {

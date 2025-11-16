@@ -67,21 +67,6 @@ func TestPullRequestEndpoints_CreateValidationErrors(t *testing.T) {
 			wantCode:   "NOT_FOUND",
 		},
 		{
-			name: "no reviewers available",
-			setup: func(t *testing.T) {
-				testSuite.CreateTeam(t, "solo", helpers.NewTeamMembersBuilder().
-					With(testAuthorID, "Author", true).
-					Build())
-			},
-			payload: map[string]any{
-				"pull_request_id":   "PR-100",
-				"pull_request_name": "Solo",
-				"author_id":         testAuthorID,
-			},
-			wantStatus: http.StatusConflict,
-			wantCode:   "NO_CANDIDATE",
-		},
-		{
 			name: "invalid payload",
 			payload: map[string]any{
 				"pull_request_id": "",
@@ -111,6 +96,49 @@ func TestPullRequestEndpoints_CreateValidationErrors(t *testing.T) {
 				resp = testSuite.PerformRequest(t, http.MethodPost, "/pullRequest/create", tc.payload)
 			}
 			testSuite.ExpectError(t, resp, tc.wantStatus, tc.wantCode)
+		})
+	}
+}
+
+func TestPullRequestEndpoints_CreateWithLimitedReviewers(t *testing.T) {
+	cases := []struct {
+		name                 string
+		setupTeam            func(t *testing.T)
+		wantAssignedCount    int
+		wantNeedMoreReviewer bool
+	}{
+		{
+			name: "single active reviewer",
+			setupTeam: func(t *testing.T) {
+				testSuite.CreateTeam(t, "solo", helpers.NewTeamMembersBuilder().
+					With(testAuthorID, "Author", true).
+					With("reviewer-1", "Bob", true).
+					Build())
+			},
+			wantAssignedCount:    1,
+			wantNeedMoreReviewer: true,
+		},
+		{
+			name: "no active reviewers",
+			setupTeam: func(t *testing.T) {
+				testSuite.CreateTeam(t, "solo", helpers.NewTeamMembersBuilder().
+					With(testAuthorID, "Author", true).
+					Build())
+			},
+			wantAssignedCount:    0,
+			wantNeedMoreReviewer: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetTables(t)
+			tc.setupTeam(t)
+
+			const prID = "PR-100"
+			pr := testSuite.CreatePullRequest(t, prID, "Edge", testAuthorID)
+			require.Len(t, pr.AssignedReviewers, tc.wantAssignedCount)
+			require.Equal(t, tc.wantNeedMoreReviewer, pr.NeedMoreReviewers)
 		})
 	}
 }
