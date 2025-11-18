@@ -32,6 +32,7 @@ test-e2e:
 
 # Docker
 docker-up:
+	go mod tidy
 	docker compose up --build -d
 
 docker-down:

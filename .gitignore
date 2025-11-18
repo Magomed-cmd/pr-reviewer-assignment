@@ -70,9 +70,6 @@ tmp/
 .local/
 plan/*
 
-# Module download cache
-go.sum
-
 # Ignore binary output
 pr-reviewer-assignment
 pr-reviewer-serviceplan/
