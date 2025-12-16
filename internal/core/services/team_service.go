@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"pr-reviewer-assignment/internal/core/domain/entities"
@@ -21,7 +22,7 @@ type TeamService struct {
 
 func NewTeamService(teamRepo repo.TeamRepository, userRepo repo.UserRepository, logger *zap.Logger, txManager transactions.Manager) *TeamService {
 	if txManager == nil {
-		txManager = transactions.NoopManager{}
+		panic("txManager is required")
 	}
 
 	return &TeamService{
@@ -35,25 +36,26 @@ func NewTeamService(teamRepo repo.TeamRepository, userRepo repo.UserRepository, 
 func (s *TeamService) CreateTeam(ctx context.Context, name string, members []*entities.User) (*entities.Team, error) {
 	validatedName, err := validation.RequireString("team_name", name)
 	if err != nil {
-		s.logger.Error("Invalid team name", zap.String("team_name", name), zap.Error(err))
+		s.logger.Warn("Invalid team name", zap.String("team_name", name), zap.Error(err))
 		return nil, err
 	}
-	name = validatedName
 
 	now := time.Now().UTC()
-	team := entities.NewTeam(name, now, now)
+	team := entities.NewTeam(validatedName, now, now)
 
-	preparedMembers := s.prepareMembers(name, members, now)
+	validMembers := s.validateMembers(members)
+
+	addedMembers := team.AddMembers(validMembers, now)
 
 	if err := s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.teamRepo.Create(txCtx, team); err != nil {
-			s.logger.Error("Failed to create team", zap.String("team_name", name), zap.Error(err))
+			s.logger.Error("Failed to create team", zap.String("team_name", validatedName), zap.Error(err))
 			return err
 		}
 
-		if len(preparedMembers) > 0 {
-			if err := s.userRepo.UpsertMany(txCtx, preparedMembers); err != nil {
-				s.logger.Error("Failed to upsert team members", zap.String("team_name", name), zap.Error(err))
+		if len(addedMembers) > 0 {
+			if err := s.userRepo.UpsertMany(txCtx, addedMembers); err != nil {
+				s.logger.Error("Failed to upsert team members", zap.String("team_name", validatedName), zap.Error(err))
 				return err
 			}
 		}
@@ -63,75 +65,57 @@ func (s *TeamService) CreateTeam(ctx context.Context, name string, members []*en
 		return nil, err
 	}
 
-	if len(preparedMembers) > 0 {
-		team.Members = make(map[string]*entities.User, len(preparedMembers))
-		for _, member := range preparedMembers {
-			team.Members[member.ID] = member
-		}
-	}
-
 	return team, nil
 }
 
 func (s *TeamService) GetTeam(ctx context.Context, name string) (*entities.Team, error) {
 	validatedName, err := validation.RequireString("team_name", name)
 	if err != nil {
-		s.logger.Error("Invalid team name", zap.String("team_name", name), zap.Error(err))
+		s.logger.Warn("Invalid team name", zap.String("team_name", name), zap.Error(err))
 		return nil, err
 	}
-	name = validatedName
 
-	team, err := s.teamRepo.Get(ctx, name)
+	team, err := s.teamRepo.Get(ctx, validatedName)
 	if err != nil {
-		s.logger.Error("Failed to get team", zap.String("team_name", name), zap.Error(err))
+		s.logger.Error("Failed to get team", zap.String("team_name", validatedName), zap.Error(err))
 		return nil, err
 	}
 
 	return team, nil
 }
 
-func (s *TeamService) prepareMembers(teamName string, members []*entities.User, fallbackTime time.Time) []*entities.User {
+func (s *TeamService) validateMembers(members []*entities.User) []*entities.User {
 	if len(members) == 0 {
 		return nil
 	}
 
-	prepared := make([]*entities.User, 0, len(members))
-	seenIDs := make(map[string]struct{})
+	valid := make([]*entities.User, 0, len(members))
 
 	for _, member := range members {
 		if member == nil {
 			continue
 		}
 
-		memberID, memberErr := validation.RequireString("user_id", member.ID)
-		if memberErr != nil {
+		memberID := strings.TrimSpace(member.ID)
+		if memberID == "" {
 			continue
 		}
 
-		memberUsername, usernameErr := validation.RequireString("username", member.Username)
-		if usernameErr != nil {
+		memberUsername := strings.TrimSpace(member.Username)
+		if memberUsername == "" {
 			continue
 		}
 
-		if _, exists := seenIDs[memberID]; exists {
-			continue
-		}
-		seenIDs[memberID] = struct{}{}
-
-		member.ID = memberID
-		member.TeamName = teamName
-		member.Username = memberUsername
-
-		if member.CreatedAt.IsZero() {
-			member.CreatedAt = fallbackTime
+		validUser := &entities.User{
+			ID:        memberID,
+			Username:  memberUsername,
+			IsActive:  member.IsActive,
+			CreatedAt: member.CreatedAt,
+			UpdatedAt: member.UpdatedAt,
 		}
 
-		if member.UpdatedAt.IsZero() {
-			member.UpdatedAt = member.CreatedAt
-		}
-
-		prepared = append(prepared, member)
+		valid = append(valid, validUser)
 	}
 
-	return prepared
+	return valid
 }
