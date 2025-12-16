@@ -7,17 +7,9 @@ import (
 
 	"pr-reviewer-assignment/internal/config"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
-
-type DB interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
 
 func NewConnection(cfg *config.DatabaseConfig, logger *zap.Logger) (*pgxpool.Pool, error) {
 	dsn := cfg.GetDSN()

@@ -8,7 +8,6 @@ import (
 
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	domainErrors "pr-reviewer-assignment/internal/core/domain/errors"
-	"pr-reviewer-assignment/internal/infrastructure/database/postgres"
 
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
@@ -19,11 +18,11 @@ type rowScanner interface {
 }
 
 type UserRepository struct {
-	db     postgres.DB
+	db     DB
 	logger *zap.Logger
 }
 
-func NewUserRepository(db postgres.DB, logger *zap.Logger) *UserRepository {
+func NewUserRepository(db DB, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
 		db:     db,
 		logger: logger,
@@ -214,8 +213,8 @@ func scanUser(row rowScanner) (*entities.User, error) {
 	return entities.NewUser(id, username, teamName, isActive, createdAt, updatedAt), nil
 }
 
-func (r *UserRepository) dbFor(ctx context.Context) postgres.DB {
-	if tx := postgres.DBFromContext(ctx); tx != nil {
+func (r *UserRepository) dbFor(ctx context.Context) DB {
+	if tx := DBFromContext(ctx); tx != nil {
 		return tx
 	}
 

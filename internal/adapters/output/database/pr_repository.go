@@ -10,18 +10,17 @@ import (
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	domainErrors "pr-reviewer-assignment/internal/core/domain/errors"
 	"pr-reviewer-assignment/internal/core/domain/types"
-	"pr-reviewer-assignment/internal/infrastructure/database/postgres"
 
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
 type PullRequestRepository struct {
-	db     postgres.DB
+	db     DB
 	logger *zap.Logger
 }
 
-func NewPullRequestRepository(db postgres.DB, logger *zap.Logger) *PullRequestRepository {
+func NewPullRequestRepository(db DB, logger *zap.Logger) *PullRequestRepository {
 	return &PullRequestRepository{
 		db:     db,
 		logger: logger,
@@ -261,7 +260,7 @@ func (r *PullRequestRepository) CountAssignments(ctx context.Context) (int, erro
 	return count, nil
 }
 
-func (r *PullRequestRepository) fetchReviewers(ctx context.Context, db postgres.DB, prID string) ([]string, error) {
+func (r *PullRequestRepository) fetchReviewers(ctx context.Context, db DB, prID string) ([]string, error) {
 	const query = `
 		SELECT user_id
 		FROM pr_reviewers
@@ -302,7 +301,7 @@ func (r *PullRequestRepository) fetchReviewers(ctx context.Context, db postgres.
 	return reviewers, nil
 }
 
-func (r *PullRequestRepository) syncReviewers(ctx context.Context, db postgres.DB, prID string, reviewers []string, replace bool) error {
+func (r *PullRequestRepository) syncReviewers(ctx context.Context, db DB, prID string, reviewers []string, replace bool) error {
 	if replace {
 		if _, err := db.Exec(ctx, `DELETE FROM pr_reviewers WHERE pull_request_id = $1`, prID); err != nil {
 			r.logger.Error("Failed to delete existing reviewers",
@@ -388,8 +387,8 @@ func scanPullRequest(row rowScanner) (*entities.PullRequest, error) {
 	}, nil
 }
 
-func (r *PullRequestRepository) dbFor(ctx context.Context) postgres.DB {
-	if tx := postgres.DBFromContext(ctx); tx != nil {
+func (r *PullRequestRepository) dbFor(ctx context.Context) DB {
+	if tx := DBFromContext(ctx); tx != nil {
 		return tx
 	}
 

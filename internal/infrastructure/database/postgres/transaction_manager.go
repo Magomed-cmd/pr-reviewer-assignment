@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 
+	"pr-reviewer-assignment/internal/adapters/output/database"
 	"pr-reviewer-assignment/internal/core/ports/transactions"
 
 	"github.com/jackc/pgx/v5"
@@ -34,7 +35,7 @@ func (m *TransactionManager) WithinTransaction(ctx context.Context, fn func(ctx 
 		return err
 	}
 
-	txCtx := ContextWithDB(ctx, tx)
+	txCtx := database.ContextWithDB(ctx, tx)
 
 	if err := fn(txCtx); err != nil {
 		if rbErr := tx.Rollback(ctx); rbErr != nil {

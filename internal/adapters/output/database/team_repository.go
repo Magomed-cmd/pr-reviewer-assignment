@@ -8,17 +8,16 @@ import (
 
 	"pr-reviewer-assignment/internal/core/domain/entities"
 	domainErrors "pr-reviewer-assignment/internal/core/domain/errors"
-	"pr-reviewer-assignment/internal/infrastructure/database/postgres"
 
 	"go.uber.org/zap"
 )
 
 type TeamRepository struct {
-	db     postgres.DB
+	db     DB
 	logger *zap.Logger
 }
 
-func NewTeamRepository(db postgres.DB, logger *zap.Logger) *TeamRepository {
+func NewTeamRepository(db DB, logger *zap.Logger) *TeamRepository {
 	return &TeamRepository{
 		db:     db,
 		logger: logger,
@@ -158,8 +157,8 @@ func (r *TeamRepository) Get(ctx context.Context, teamName string) (*entities.Te
 	return team, nil
 }
 
-func (r *TeamRepository) dbFor(ctx context.Context) postgres.DB {
-	if tx := postgres.DBFromContext(ctx); tx != nil {
+func (r *TeamRepository) dbFor(ctx context.Context) DB {
+	if tx := DBFromContext(ctx); tx != nil {
 		return tx
 	}
 
